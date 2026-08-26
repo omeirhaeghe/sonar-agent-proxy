@@ -1,0 +1,11 @@
+name = "sonar-agent-proxy"
+main = "src/worker.ts"
+compatibility_date = "2026-08-01"
+
+# Set secrets with:  wrangler secret put PPLX_API_KEY   (optional — the proxy
+# passes the caller's Authorization header through by default)
+#
+# [vars]
+# UPSTREAM_URL = "https://api.perplexity.ai/v1/agent"
+# INPUT_MODE = "array"
+# MODEL_TO_PRESET = '{"sonar-pro":"low"}'
