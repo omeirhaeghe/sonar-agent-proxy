@@ -152,7 +152,12 @@ interface InspectBody {
   system?: string;
   model?: string;
   max_tokens?: number;
+  // Routing override: an Agent API preset name (fast/low/medium/high/xhigh)
+  // or a model id like "perplexity/sonar".
+  target?: string;
 }
+
+const AGENT_PRESETS = new Set(["fast", "low", "medium", "high", "xhigh"]);
 
 app.post("/inspect", async (c) => {
   const auth = c.req.header("authorization") ?? undefined;
@@ -184,6 +189,22 @@ app.post("/inspect", async (c) => {
   };
 
   const { body: agentRequest, dropped } = toAgentRequest(sonarRequest, config(c));
+
+  // Apply the demo's routing override after translation, so the displayed
+  // agent_request is exactly what goes upstream.
+  const target = req.target?.trim();
+  if (target) {
+    if (AGENT_PRESETS.has(target)) {
+      delete agentRequest.model;
+      agentRequest.preset = target;
+    } else {
+      delete agentRequest.preset;
+      agentRequest.model = target;
+      if (!agentRequest.tools?.some((t) => t.type === "web_search")) {
+        agentRequest.tools = [...(agentRequest.tools ?? []), { type: "web_search" }];
+      }
+    }
+  }
 
   if (!upstreamAuth) {
     return c.json({

@@ -12,9 +12,12 @@ The proxy also serves a demo page at `GET /`: a prompt box that sends one
 real request through the proxy and renders the whole flow — the Sonar-shaped
 request your app would send, the translated Agent API request (with any
 dropped fields flagged), the raw Agent API response, and the Sonar-shaped
-response your app gets back, with the answer and citations on top. Paste your
-Perplexity key in the box (kept in your browser) or set `PPLX_API_KEY` on the
-server.
+response your app gets back, with the answer and citations on top. The answer
+renders as markdown, shows its length in characters and completion tokens,
+and the form lets you set max tokens and pick the Agent API routing target —
+any effort preset (fast/low/medium/high/xhigh) or a direct model id — to
+compare depth and length before committing a mapping. Paste your Perplexity
+key in the box (kept in your browser) or set `PPLX_API_KEY` on the server.
 
 ```
 your app ──► your backend route ──► sonar-agent-proxy ──► Agent API

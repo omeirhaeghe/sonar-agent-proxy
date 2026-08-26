@@ -55,7 +55,7 @@ export const DEMO_PAGE = `<!doctype html>
     display: grid; gap: 10px;
   }
   label { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
-  textarea, input[type=password], input[type=text] {
+  textarea, select, input[type=password], input[type=text], input[type=number] {
     width: 100%;
     background: var(--ink);
     color: var(--text);
@@ -64,8 +64,9 @@ export const DEMO_PAGE = `<!doctype html>
     font: inherit;
     padding: 10px 12px;
   }
+  select { appearance: auto; }
   textarea { resize: vertical; min-height: 64px; }
-  textarea:focus, input:focus, button:focus-visible { outline: 2px solid var(--agent); outline-offset: 1px; }
+  textarea:focus, select:focus, input:focus, button:focus-visible { outline: 2px solid var(--agent); outline-offset: 1px; }
   .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
   .row > div { flex: 1 1 220px; }
   .row > div.narrow { flex: 0 1 130px; min-width: 110px; }
@@ -91,8 +92,36 @@ export const DEMO_PAGE = `<!doctype html>
     padding: 16px 18px;
     margin: 18px 0;
     font-size: 13.5px;
-    white-space: pre-wrap;
   }
+  #answer .body.plain { white-space: pre-wrap; }
+  #answer .body.md { font-family: var(--disp); font-size: 14px; line-height: 1.6; }
+  #answer .body.md h1, #answer .body.md h2, #answer .body.md h3, #answer .body.md h4 {
+    font-family: var(--disp); font-weight: 600; margin: 14px 0 6px; line-height: 1.3;
+  }
+  #answer .body.md h1 { font-size: 17px; } #answer .body.md h2 { font-size: 15.5px; }
+  #answer .body.md h3, #answer .body.md h4 { font-size: 14px; }
+  #answer .body.md > :first-child { margin-top: 0; }
+  #answer .body.md p { margin: 8px 0; }
+  #answer .body.md ul, #answer .body.md ol { margin: 8px 0; padding-left: 22px; }
+  #answer .body.md li { margin: 3px 0; }
+  #answer .body.md a { color: var(--agent); }
+  #answer .body.md strong { color: #fff; font-weight: 600; }
+  #answer .body.md code {
+    font-family: var(--mono); font-size: 12px;
+    background: var(--ink); border: 1px solid var(--panel-edge);
+    border-radius: 4px; padding: 1px 5px;
+  }
+  #answer .body.md pre { margin: 8px 0; max-height: 260px; }
+  #answer .body.md pre code { border: 0; background: none; padding: 0; }
+  #answer .body.md blockquote {
+    border-left: 3px solid var(--panel-edge); margin: 8px 0; padding: 2px 12px;
+    color: var(--muted);
+  }
+  #answer .body.md table { border-collapse: collapse; margin: 10px 0; display: block; overflow-x: auto; }
+  #answer .body.md th, #answer .body.md td {
+    border: 1px solid var(--panel-edge); padding: 5px 10px; text-align: left; font-size: 13px;
+  }
+  #answer .body.md th { color: var(--muted); font-weight: 500; }
   #answer .cites { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
   #answer .cites a {
     color: var(--agent); text-decoration: none; font-size: 11.5px;
@@ -184,6 +213,28 @@ export const DEMO_PAGE = `<!doctype html>
       </div>
       <button id="go" type="submit">Send through proxy</button>
     </div>
+    <div class="row">
+      <div>
+        <label for="route">Route to (Agent API preset or model)</label>
+        <select id="route">
+          <optgroup label="Presets (effort tiers)">
+            <option value="">low — default sonar-pro mapping</option>
+            <option value="fast">fast — old sonar tier</option>
+            <option value="medium">medium — old sonar-reasoning-pro tier, fuller answers</option>
+            <option value="high">high — old sonar-deep-research tier</option>
+            <option value="xhigh">xhigh — deepest research</option>
+          </optgroup>
+          <optgroup label="Direct models">
+            <option value="perplexity/sonar">perplexity/sonar + web_search</option>
+            <option value="custom">custom model id…</option>
+          </optgroup>
+        </select>
+      </div>
+      <div id="customwrap" style="display:none">
+        <label for="custommodel">Custom model id</label>
+        <input type="text" id="custommodel" placeholder="e.g. anthropic/claude-... (see Perplexity docs)">
+      </div>
+    </div>
     <div class="hint">The key goes straight from this page to the proxy to
     Perplexity and is stored only in your browser. Leave it empty if the server
     has PPLX_API_KEY set.</div>
@@ -216,6 +267,8 @@ export const DEMO_PAGE = `<!doctype html>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js" defer></script>
 <script>
 (function () {
   var f = document.getElementById("f");
@@ -225,7 +278,22 @@ export const DEMO_PAGE = `<!doctype html>
   var answer = document.getElementById("answer");
   var keyInput = document.getElementById("key");
 
+  var routeSel = document.getElementById("route");
+  var customWrap = document.getElementById("customwrap");
+
   try { keyInput.value = localStorage.getItem("pplx_key") || ""; } catch (e) {}
+  try {
+    var savedRoute = localStorage.getItem("pplx_route");
+    if (savedRoute) routeSel.value = savedRoute;
+    document.getElementById("custommodel").value =
+      localStorage.getItem("pplx_custom_model") || "";
+  } catch (e) {}
+
+  function syncCustom() {
+    customWrap.style.display = routeSel.value === "custom" ? "" : "none";
+  }
+  routeSel.addEventListener("change", syncCustom);
+  syncCustom();
 
   function show(id, obj) {
     document.getElementById(id).textContent =
@@ -242,7 +310,13 @@ export const DEMO_PAGE = `<!doctype html>
     var system = document.getElementById("system").value;
     var maxTok = parseInt(document.getElementById("maxtok").value, 10);
     var key = keyInput.value.trim();
-    try { localStorage.setItem("pplx_key", key); } catch (e) {}
+    var customModel = document.getElementById("custommodel").value.trim();
+    var target = routeSel.value === "custom" ? customModel : routeSel.value;
+    try {
+      localStorage.setItem("pplx_key", key);
+      localStorage.setItem("pplx_route", routeSel.value);
+      localStorage.setItem("pplx_custom_model", customModel);
+    } catch (e) {}
 
     go.disabled = true;
     status.className = "";
@@ -267,6 +341,7 @@ export const DEMO_PAGE = `<!doctype html>
         prompt: prompt,
         system: system,
         max_tokens: isNaN(maxTok) ? undefined : maxTok,
+        target: target || undefined,
       }),
     })
       .then(function (r) { return r.json(); })
@@ -293,7 +368,22 @@ export const DEMO_PAGE = `<!doctype html>
           var cites = d.sonar_response.citations || [];
           var usage = d.sonar_response.usage || {};
           var finish = d.sonar_response.choices[0].finish_reason;
-          answer.innerHTML = esc(msg);
+          answer.innerHTML = "";
+          var bodyDiv = document.createElement("div");
+          if (window.marked && window.DOMPurify) {
+            bodyDiv.className = "body md";
+            bodyDiv.innerHTML = window.DOMPurify.sanitize(
+              window.marked.parse(msg),
+              { FORBID_TAGS: ["style", "form", "input"] }
+            );
+            bodyDiv.querySelectorAll("a").forEach(function (a) {
+              a.target = "_blank"; a.rel = "noreferrer";
+            });
+          } else {
+            bodyDiv.className = "body plain";
+            bodyDiv.textContent = msg;
+          }
+          answer.appendChild(bodyDiv);
           var stats = document.createElement("div");
           stats.className = "stats";
           stats.innerHTML =
