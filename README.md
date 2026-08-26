@@ -87,6 +87,45 @@ fly launch
 
 The Dockerfile serves on `$PORT` (default 8080).
 
+**Option C — Azure (Container Apps)**:
+
+```bash
+az login
+az extension add --name containerapp --upgrade
+
+# Builds the Dockerfile in Azure and deploys in one command — creates the
+# resource group, container registry, and Container Apps environment for you.
+az containerapp up \
+  --name sonar-agent-proxy \
+  --resource-group sonar-agent-proxy-rg \
+  --location eastus \
+  --source . \
+  --ingress external \
+  --target-port 8080
+```
+
+The command prints the app URL (`https://sonar-agent-proxy.<...>.azurecontainerapps.io`)
+— that's your proxy base URL. Verify with `curl https://<url>/health`.
+
+Optional env vars / secrets:
+
+```bash
+az containerapp secret set -n sonar-agent-proxy -g sonar-agent-proxy-rg \
+  --secrets pplx-api-key=pplx-...
+az containerapp update -n sonar-agent-proxy -g sonar-agent-proxy-rg \
+  --set-env-vars PPLX_API_KEY=secretref:pplx-api-key INPUT_MODE=array
+```
+
+Notes for this workload:
+- Container Apps supports SSE, so streaming works; the default HTTP idle
+  timeout (240s) is far above any Agent API response time.
+- Scale-to-zero is the default. First request after idle takes a few seconds
+  of cold start; to avoid it, pin a warm instance:
+  `az containerapp update -n sonar-agent-proxy -g sonar-agent-proxy-rg --min-replicas 1`
+- Prefer App Service instead? The same Dockerfile works:
+  `az webapp up --runtime NODE:22-lts` also runs it, but Container Apps is
+  the better fit for a stateless streaming proxy.
+
 ## Cutover plan
 
 1. Deploy the proxy; hit `GET /health`.
