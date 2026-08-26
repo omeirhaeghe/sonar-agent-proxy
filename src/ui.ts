@@ -68,6 +68,7 @@ export const DEMO_PAGE = `<!doctype html>
   textarea:focus, input:focus, button:focus-visible { outline: 2px solid var(--agent); outline-offset: 1px; }
   .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
   .row > div { flex: 1 1 220px; }
+  .row > div.narrow { flex: 0 1 130px; min-width: 110px; }
   button {
     font-family: var(--disp); font-weight: 600; font-size: 14px;
     background: var(--agent); color: #06272b;
@@ -98,6 +99,12 @@ export const DEMO_PAGE = `<!doctype html>
     border: 1px solid var(--agent-dim); border-radius: 999px; padding: 2px 10px;
     max-width: 34ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  #answer .stats {
+    margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid var(--panel-edge);
+    color: var(--muted); font-size: 11.5px; white-space: normal;
+  }
+  #answer .stats b { color: var(--text); font-weight: 500; }
 
   /* The trace rail */
   #trace { display: none; margin-top: 10px; }
@@ -165,7 +172,11 @@ export const DEMO_PAGE = `<!doctype html>
     <div class="row">
       <div>
         <label for="system">System message (optional)</label>
-        <input type="text" id="system" placeholder="Answer in one short paragraph.">
+        <input type="text" id="system" placeholder="Answer in detail.">
+      </div>
+      <div class="narrow">
+        <label for="maxtok">Max tokens</label>
+        <input type="number" id="maxtok" min="16" max="8192" step="1" value="4096">
       </div>
       <div>
         <label for="key">Perplexity API key</label>
@@ -229,6 +240,7 @@ export const DEMO_PAGE = `<!doctype html>
     ev.preventDefault();
     var prompt = document.getElementById("prompt").value;
     var system = document.getElementById("system").value;
+    var maxTok = parseInt(document.getElementById("maxtok").value, 10);
     var key = keyInput.value.trim();
     try { localStorage.setItem("pplx_key", key); } catch (e) {}
 
@@ -251,7 +263,11 @@ export const DEMO_PAGE = `<!doctype html>
     fetch("/inspect", {
       method: "POST",
       headers: headers,
-      body: JSON.stringify({ prompt: prompt, system: system }),
+      body: JSON.stringify({
+        prompt: prompt,
+        system: system,
+        max_tokens: isNaN(maxTok) ? undefined : maxTok,
+      }),
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -275,7 +291,20 @@ export const DEMO_PAGE = `<!doctype html>
           document.getElementById("st4").classList.remove("pending");
           var msg = d.sonar_response.choices[0].message.content;
           var cites = d.sonar_response.citations || [];
+          var usage = d.sonar_response.usage || {};
+          var finish = d.sonar_response.choices[0].finish_reason;
           answer.innerHTML = esc(msg);
+          var stats = document.createElement("div");
+          stats.className = "stats";
+          stats.innerHTML =
+            "Answer length: <b>" + msg.length.toLocaleString() + " chars</b>" +
+            " \\u00b7 <b>" + (usage.completion_tokens || 0).toLocaleString() +
+            "</b> of " + (isNaN(maxTok) ? "?" : maxTok.toLocaleString()) +
+            " max completion tokens" +
+            (finish === "length"
+              ? ' \\u00b7 <span class="warn">cut off at max tokens \\u2014 raise Max tokens above</span>'
+              : "");
+          answer.appendChild(stats);
           if (cites.length) {
             var box = document.createElement("div");
             box.className = "cites";

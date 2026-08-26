@@ -151,6 +151,7 @@ interface InspectBody {
   prompt?: string;
   system?: string;
   model?: string;
+  max_tokens?: number;
 }
 
 app.post("/inspect", async (c) => {
@@ -176,7 +177,10 @@ app.post("/inspect", async (c) => {
         : []),
       { role: "user" as const, content: req.prompt.trim() },
     ],
-    max_tokens: 4096,
+    max_tokens:
+      typeof req.max_tokens === "number" && req.max_tokens > 0
+        ? Math.min(Math.floor(req.max_tokens), 8192)
+        : 4096,
   };
 
   const { body: agentRequest, dropped } = toAgentRequest(sonarRequest, config(c));
