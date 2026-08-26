@@ -5,6 +5,7 @@ import {
   toAgentRequest,
   toSonarResponse,
 } from "./translate.js";
+import { DEMO_PAGE } from "./ui.js";
 import {
   DEFAULT_MODEL_TO_PRESET,
   type AgentResponse,
@@ -139,3 +140,118 @@ async function handleChatCompletions(c: Context<Env>) {
 // Both paths, matching api.perplexity.ai and OpenAI-style clients.
 app.post("/chat/completions", handleChatCompletions);
 app.post("/v1/chat/completions", handleChatCompletions);
+
+// ---------------------------------------------------------------------------
+// Demo UI: a prompt box that shows one request crossing every stage of the
+// proxy. GET / serves the page; POST /inspect runs one real round-trip and
+// returns all four stages so the page can render the flow.
+// ---------------------------------------------------------------------------
+
+interface InspectBody {
+  prompt?: string;
+  system?: string;
+  model?: string;
+}
+
+app.post("/inspect", async (c) => {
+  const auth = c.req.header("authorization") ?? undefined;
+  const key = env(c, "PPLX_API_KEY");
+  const upstreamAuth = auth ?? (key ? `Bearer ${key}` : undefined);
+
+  let req: InspectBody;
+  try {
+    req = await c.req.json<InspectBody>();
+  } catch {
+    return c.json(errorBody("Request body is not valid JSON", "invalid_request"), 400);
+  }
+  if (!req.prompt?.trim()) {
+    return c.json(errorBody("'prompt' is required", "invalid_request"), 400);
+  }
+
+  const sonarRequest: SonarRequest = {
+    model: req.model || "sonar-pro",
+    messages: [
+      ...(req.system?.trim()
+        ? [{ role: "system" as const, content: req.system.trim() }]
+        : []),
+      { role: "user" as const, content: req.prompt.trim() },
+    ],
+    max_tokens: 512,
+  };
+
+  const { body: agentRequest, dropped } = toAgentRequest(sonarRequest, config(c));
+
+  if (!upstreamAuth) {
+    return c.json({
+      sonar_request: sonarRequest,
+      agent_request: agentRequest,
+      dropped_fields: dropped,
+      error: "No API key: paste your Perplexity key in the page, or set PPLX_API_KEY on the server.",
+    });
+  }
+
+  const upstreamUrl = env(c, "UPSTREAM_URL") ?? "https://api.perplexity.ai/v1/agent";
+  const t0 = Date.now();
+  let upstream: Response;
+  try {
+    upstream = await fetch(upstreamUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        authorization: upstreamAuth,
+      },
+      body: JSON.stringify(agentRequest),
+    });
+  } catch (e) {
+    return c.json({
+      sonar_request: sonarRequest,
+      agent_request: agentRequest,
+      dropped_fields: dropped,
+      error: `Upstream request failed: ${String(e)}`,
+    });
+  }
+  const latency = Date.now() - t0;
+
+  if (!upstream.ok) {
+    const detail = await upstream.text().catch(() => "");
+    return c.json({
+      sonar_request: sonarRequest,
+      agent_request: agentRequest,
+      dropped_fields: dropped,
+      upstream_status: upstream.status,
+      latency_ms: latency,
+      error: `Agent API returned ${upstream.status}: ${detail.slice(0, 1000)}`,
+    });
+  }
+
+  let agentResponse: AgentResponse;
+  try {
+    agentResponse = (await upstream.json()) as AgentResponse;
+  } catch {
+    return c.json({
+      sonar_request: sonarRequest,
+      agent_request: agentRequest,
+      dropped_fields: dropped,
+      upstream_status: upstream.status,
+      latency_ms: latency,
+      error: "Upstream returned non-JSON body",
+    });
+  }
+
+  const failed =
+    agentResponse.status === "failed" || agentResponse.status === "cancelled";
+  return c.json({
+    sonar_request: sonarRequest,
+    agent_request: agentRequest,
+    dropped_fields: dropped,
+    upstream_status: upstream.status,
+    latency_ms: latency,
+    agent_response: agentResponse,
+    ...(failed
+      ? { error: agentResponse.error?.message ?? `Agent run ${agentResponse.status}` }
+      : { sonar_response: toSonarResponse(agentResponse, sonarRequest.model) }),
+  });
+});
+
+app.get("/", (c) => c.html(DEMO_PAGE));

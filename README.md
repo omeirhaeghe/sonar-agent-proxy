@@ -8,6 +8,14 @@ calls (`POST /chat/completions`), and translates each call to the new
 Sonar endpoints retire on **September 27, 2026**. Point your backend's
 Perplexity base URL at this proxy before then and nothing else changes.
 
+The proxy also serves a demo page at `GET /`: a prompt box that sends one
+real request through the proxy and renders the whole flow — the Sonar-shaped
+request your app would send, the translated Agent API request (with any
+dropped fields flagged), the raw Agent API response, and the Sonar-shaped
+response your app gets back, with the answer and citations on top. Paste your
+Perplexity key in the box (kept in your browser) or set `PPLX_API_KEY` on the
+server.
+
 ```
 your app ──► your backend route ──► sonar-agent-proxy ──► Agent API
              (unchanged: sends            (translates
@@ -87,7 +95,20 @@ fly launch
 
 The Dockerfile serves on `$PORT` (default 8080).
 
-**Option C — Azure (Container Apps)**:
+**Option C — Render**:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/omeirhaeghe/sonar-agent-proxy)
+
+The repo has a `render.yaml` blueprint, so either click the button above or:
+Render dashboard → **New → Blueprint** → pick this repo → deploy. It builds
+the Dockerfile and serves on the assigned `$PORT` automatically. Optionally
+set `PPLX_API_KEY` in the service's Environment tab (marked `sync: false`,
+so Render prompts you for it on first deploy).
+
+Free-plan note: free web services spin down when idle, so the first request
+after a quiet period takes ~30s. Use the Starter plan for production traffic.
+
+**Option D — Azure (Container Apps)**:
 
 ```bash
 az login
