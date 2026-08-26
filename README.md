@@ -59,6 +59,11 @@ proxy and it fills in the auth when the caller sends none.
 - `UPSTREAM_URL` — default `https://api.perplexity.ai/v1/agent`
 - `PPLX_API_KEY` — fallback key when the caller sends no Authorization header
 - `MODEL_TO_PRESET` — JSON merged over the default mapping, e.g. `{"sonar-pro":"medium"}`
+  — **this is the answer-length/depth knob**: presets control how much research
+  and writing the Agent API does. If answers feel shorter than sonar-pro used
+  to give, map `sonar-pro` to `"medium"` (or `"high"`; higher presets cost
+  more and respond slower). The other length factor is your app's own
+  `max_tokens`, which passes through as `max_output_tokens`.
 - `INPUT_MODE` — `array` (default: messages become Responses-style input items)
   or `string` (conversation flattened to one prompt)
 

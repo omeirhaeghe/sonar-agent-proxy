@@ -176,7 +176,7 @@ app.post("/inspect", async (c) => {
         : []),
       { role: "user" as const, content: req.prompt.trim() },
     ],
-    max_tokens: 512,
+    max_tokens: 4096,
   };
 
   const { body: agentRequest, dropped } = toAgentRequest(sonarRequest, config(c));
